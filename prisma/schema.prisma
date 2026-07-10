@@ -1,0 +1,138 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../lib/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pgvector]
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+enum UploadStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  ERROR
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  uploads       Upload[]
+  chatSessions  ChatSession[]
+  practiceTests PracticeTest[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Upload {
+  id          String         @id @default(cuid())
+  filename    String
+  fileSize    Int
+  // One of: PENDING, PROCESSING, COMPLETED, ERROR
+  status      UploadStatus   @default(PENDING)
+  storagePath String?
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions   Question[]
+  createdAt   DateTime       @default(now())
+}
+
+model Question {
+  id          String             @id @default(cuid())
+  content     String
+  // One of: EASY, MEDIUM, HARD
+  difficulty  Difficulty         @default(MEDIUM)
+  topicId     String?
+  topic       Topic?             @relation(fields: [topicId], references: [id])
+  uploadId    String
+  upload      Upload             @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  flashcards  Flashcard[]
+  testItems   PracticeTestItem[]
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime           @default(now())
+
+  @@index([uploadId])
+  @@index([topicId])
+}
+
+model Topic {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  questions Question[]
+}
+
+model Flashcard {
+  id         String    @id @default(cuid())
+  front      String
+  back       String
+  questionId String?
+  question   Question? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  title     String
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  content   String
+  // One of: USER, ASSISTANT
+  role      ChatRole
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
+}
+
+model PracticeTest {
+  id             String             @id @default(cuid())
+  title          String
+  score          Int?
+  totalQuestions Int
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items          PracticeTestItem[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model PracticeTestItem {
+  id             String       @id @default(cuid())
+  testId         String
+  test           PracticeTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  options        String[]
+  correctAnswer  String
+  selectedAnswer String?
+  isCorrect      Boolean?
+  explanation    String?
+
+  @@index([testId])
+}

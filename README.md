@@ -11,7 +11,7 @@ MAY, 2026
  
 
 DECLARATION
-I, Emeka Jude Ugwu, hereby declare that this project titled Automated Event Venue and Workspace Reservation System with AI-Powered Conversational Agent has been carried out by me under the supervision of Dr. Salisu Aliyu Salisu . It has not been presented for the award of any degree in any institution. All sources of information are specifically acknowledged by means of reference.
+I, Emeka Jude Ugwu, hereby declare that this project titled AI-Powered Past Question Study Assistant for Personalized Learning and Examination has been carried out by me under the supervision of Dr. Salisu Aliyu Salisu . It has not been presented for the award of any degree in any institution. All sources of information are specifically acknowledged by means of reference.
 
 Signature: ....................................................			Date: .......................................
 
@@ -624,5 +624,8 @@ Flashcard Generator
 Practice Test Generator
 Study Recommendation Dashboard
 Database Records (Optional)
+
+
+ional)
 
 
