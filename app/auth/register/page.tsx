@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Lock, Mail, ArrowRight, User, Eye, EyeOff } from "lucide-react";
@@ -17,7 +18,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password || !confirmPassword) {
       setError("Please fill in all fields");
@@ -34,11 +35,40 @@ export default function RegisterPage() {
     setIsLoading(true);
     setError("");
 
-    // Simulate database registration and redirect to dashboard
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = data.error || "Registration failed";
+        const details = data.details ? ` Details: ${data.details}` : "";
+        const hint = res.status === 503 ? " (Neon may be waking up — wait 10s and retry)" : "";
+        setError(msg + details + hint);
+        return;
+      }
+
+      // Auto-login after registration
+      const loginResult = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (loginResult?.error) {
+        router.push("/auth/login");
+      } else {
+        router.push("/dashboard");
+      }
+    } catch (err) {
+      setError("Registration failed. Please try again.");
+    } finally {
       setIsLoading(false);
-      router.push("/dashboard");
-    }, 1500);
+    }
   };
 
   return (

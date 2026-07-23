@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 import {
@@ -86,8 +87,16 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { data: session } = useSession();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const userInitials = session?.user?.name
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "U";
 
   return (
     <div className="flex min-h-screen bg-slate-50/50 dark:bg-[#09090b] transition-colors duration-300">
@@ -171,16 +180,16 @@ export default function DashboardLayout({
 
         {/* Footer Area */}
         <div className="p-4 border-t border-slate-200/80 dark:border-zinc-800/80">
-          <Link
-            href="/"
+          <button
+            onClick={() => signOut({ callbackUrl: "/auth/login" })}
             className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all",
+              "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all w-full",
               isSidebarCollapsed && "justify-center"
             )}
           >
             <LogOut className="h-5 w-5 shrink-0" />
             {!isSidebarCollapsed && <span>Logout</span>}
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -224,13 +233,16 @@ export default function DashboardLayout({
               })}
             </nav>
             <div className="border-t border-slate-200 dark:border-zinc-800 pt-4">
-              <Link
-                href="/"
-                className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+              <button
+                onClick={() => {
+                  signOut({ callbackUrl: "/auth/login" });
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 w-full"
               >
                 <LogOut className="h-5 w-5" />
                 <span>Logout</span>
-              </Link>
+              </button>
             </div>
           </div>
           <div className="flex-1" onClick={() => setIsMobileMenuOpen(false)} />
@@ -288,18 +300,18 @@ export default function DashboardLayout({
                   className="flex items-center gap-2 p-1.5 h-9 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800"
                 >
                   <div className="h-6 w-6 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold">
-                    EJ
+                    {userInitials}
                   </div>
                   <span className="text-xs font-medium text-slate-700 dark:text-zinc-300 hidden md:inline-block pr-1">
-                    Emeka Jude
+                    {session?.user?.name || "User"}
                   </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 mt-1 rounded-xl">
                 <DropdownMenuLabel>
                   <div className="flex flex-col">
-                    <span className="font-semibold text-sm">Emeka Jude Ugwu</span>
-                    <span className="text-xs text-slate-500 dark:text-zinc-400 font-normal">emeka@abu.edu.ng</span>
+                    <span className="font-semibold text-sm">{session?.user?.name || "User"}</span>
+                    <span className="text-xs text-slate-500 dark:text-zinc-400 font-normal">{session?.user?.email || ""}</span>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -308,7 +320,10 @@ export default function DashboardLayout({
                   My Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer text-red-600 dark:text-red-400">
+                <DropdownMenuItem
+                  className="cursor-pointer text-red-600 dark:text-red-400"
+                  onClick={() => signOut({ callbackUrl: "/auth/login" })}
+                >
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout
                 </DropdownMenuItem>

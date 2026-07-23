@@ -8,6 +8,11 @@ export const dynamic = "force-dynamic";
 export default async function RecommendationsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/auth/login");
-  const items = await getRecommendations(session.user.id);
+  let items: Awaited<ReturnType<typeof getRecommendations>> = [];
+  try {
+    items = await getRecommendations(session.user.id);
+  } catch (err) {
+    console.error("[Recommendations] Failed to load, using fallback:", err);
+  }
   return <RecommendationsView items={items} />;
 }

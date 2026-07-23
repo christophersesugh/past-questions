@@ -1,6 +1,9 @@
 -- Initial schema for past-questions
 -- Generated from prisma/schema.prisma (enums: Difficulty, ChatRole, UploadStatus)
 
+-- Enable pgvector extension for embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- CreateEnum
 CREATE TYPE "Difficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
 
@@ -42,6 +45,7 @@ CREATE TABLE "Question" (
     "difficulty" "Difficulty" NOT NULL DEFAULT 'MEDIUM',
     "topicId" TEXT,
     "uploadId" TEXT NOT NULL,
+    "embedding" vector(1536),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Question_pkey" PRIMARY KEY ("id")

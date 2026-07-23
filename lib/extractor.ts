@@ -1,5 +1,5 @@
 import mammoth from "mammoth";
-import { createWorker, type Worker } from "tesseract.js";
+import { createWorker } from "tesseract.js";
 import { Buffer } from "node:buffer";
 // pdf-parse v2 changed its API; pin to v1 to keep the function-style call below.
 import pdfParse from "pdf-parse";
@@ -75,7 +75,7 @@ export async function extractTextFromBuffer(
       let text = data.text || "";
 
       if (text.trim().length < 100) {
-        console.log("PDF text is empty or too short. Running OCR fallback...");
+        // PDF text extraction yielded minimal content; falling back to OCR
         text = await ocrBuffer(buffer);
       }
       return text;

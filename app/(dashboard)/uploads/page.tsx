@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Upload,
@@ -12,7 +12,6 @@ import {
   Trash2,
   Sparkles,
   ArrowRight,
-  Filter,
   Search,
   BookOpen
 } from "lucide-react";
@@ -30,110 +29,28 @@ import {
 } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 
+interface QuestionItem {
+  id: string;
+  content: string;
+  difficulty: "EASY" | "MEDIUM" | "HARD";
+  topic: string;
+  topicId?: string | null;
+}
+
 interface UploadedFile {
   id: string;
   name: string;
+  filename: string;
   size: string;
   date: string;
-  status: "COMPLETED" | "PROCESSING" | "ERROR";
+  createdAt: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "ERROR";
   questionCount?: number;
-  questions: Array<{
-    id: string;
-    content: string;
-    difficulty: "EASY" | "MEDIUM" | "HARD";
-    topic: string;
-  }>;
+  questions: QuestionItem[];
 }
 
-const mockFiles: UploadedFile[] = [
-  {
-    id: "up-1",
-    name: "COSC 301 - Operating Systems 2024.pdf",
-    size: "2.4 MB",
-    date: "Jun 28, 2026",
-    status: "COMPLETED",
-    questionCount: 15,
-    questions: [
-      {
-        id: "q-1-1",
-        content: "What is the critical section problem? Detail the three requirements that must be met by any valid solution.",
-        difficulty: "HARD",
-        topic: "Process Synchronization",
-      },
-      {
-        id: "q-1-2",
-        content: "Define mutual exclusion and discuss how semaphores can be used to solve synchronization issues.",
-        difficulty: "MEDIUM",
-        topic: "Process Synchronization",
-      },
-      {
-        id: "q-1-3",
-        content: "Explain the difference between paging and segmentation in memory management. Provide a diagrammatic comparison.",
-        difficulty: "MEDIUM",
-        topic: "Memory Management",
-      },
-      {
-        id: "q-1-4",
-        content: "What is thrashing? How can a system detect thrashing, and what actions can be taken to mitigate it?",
-        difficulty: "HARD",
-        topic: "Memory Management",
-      },
-      {
-        id: "q-1-5",
-        content: "Briefly explain the role of a short-term CPU scheduler. How does it differ from a long-term scheduler?",
-        difficulty: "EASY",
-        topic: "CPU Scheduling",
-      },
-    ],
-  },
-  {
-    id: "up-2",
-    name: "COSC 303 - Database Systems 2025.docx",
-    size: "1.2 MB",
-    date: "Jun 29, 2026",
-    status: "COMPLETED",
-    questionCount: 12,
-    questions: [
-      {
-        id: "q-2-1",
-        content: "Given a schema R(A, B, C, D, E) with functional dependencies F = {A -> BC, CD -> E, B -> D}, identify the candidate keys and determine the highest normal form of R.",
-        difficulty: "HARD",
-        topic: "Database Normalization",
-      },
-      {
-        id: "q-2-2",
-        content: "Explain the ACID properties of database transactions. Why is durability critical?",
-        difficulty: "EASY",
-        topic: "Transaction Management",
-      },
-      {
-        id: "q-2-3",
-        content: "Describe the two-phase locking (2PL) protocol. How does it guarantee serializability?",
-        difficulty: "MEDIUM",
-        topic: "Transaction Management",
-      },
-    ],
-  },
-  {
-    id: "up-3",
-    name: "COSC 311 - Software Engineering 2025.pdf",
-    size: "3.8 MB",
-    date: "Jun 30, 2026",
-    status: "PROCESSING",
-    questions: [],
-  },
-  {
-    id: "up-4",
-    name: "COSC 305 - Computer Architecture 2023.pdf",
-    size: "5.1 MB",
-    date: "May 12, 2026",
-    status: "ERROR",
-    questions: [],
-  },
-];
-
 export default function UploadsPage() {
-  const [files, setFiles] = useState<UploadedFile[]>(mockFiles);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
@@ -141,54 +58,78 @@ export default function UploadsPage() {
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState<string>("ALL");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // File Upload State Simulation
-  const simulateUpload = (fileName: string, fileSizeStr: string) => {
-    setIsUploading(true);
-    setUploadingFileName(fileName);
-    setUploadProgress(10);
+  const fetchUploads = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/uploads");
+      const data = await res.json();
+      if (res.ok) {
+        setFiles(data.uploads || []);
+      } else {
+        setError(data.error || "Failed to fetch uploads");
+      }
+    } catch (e) {
+      setError("Failed to load documents");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setIsUploading(false);
-            const newFile: UploadedFile = {
-              id: `up-${Date.now()}`,
-              name: fileName,
-              size: fileSizeStr,
-              date: new Date().toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              }),
-              status: "COMPLETED",
-              questionCount: 4,
-              questions: [
-                {
-                  id: `q-new-1`,
-                  content: `Sample theoretical question extracted from ${fileName}.`,
-                  difficulty: "MEDIUM",
-                  topic: "General Revision",
-                },
-                {
-                  id: `q-new-2`,
-                  content: `Identify the main system architecture details described in ${fileName}.`,
-                  difficulty: "HARD",
-                  topic: "System Design",
-                },
-              ],
-            };
-            setFiles((prevFiles) => [newFile, ...prevFiles]);
-          }, 800);
-          return 100;
-        }
-        return prev + 15;
+  useEffect(() => {
+    fetchUploads();
+  }, []);
+
+  const handleUpload = async (file: File) => {
+    const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
+    setIsUploading(true);
+    setUploadingFileName(file.name);
+    setUploadProgress(10);
+    setError("");
+
+    // Optimistic progress simulation while real upload processes
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => (prev < 90 ? prev + Math.random() * 10 : prev));
+    }, 500);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/uploads", {
+        method: "POST",
+        body: formData,
       });
-    }, 300);
+
+      const data = await res.json();
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (!res.ok) {
+        setError(data.error || "Upload failed");
+        setTimeout(() => {
+          setIsUploading(false);
+          setUploadProgress(0);
+        }, 1000);
+        return;
+      }
+
+      setTimeout(async () => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        await fetchUploads();
+      }, 800);
+    } catch (err) {
+      clearInterval(progressInterval);
+      setError("Upload failed. Check file format.");
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -204,17 +145,13 @@ export default function UploadsPage() {
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
-      simulateUpload(file.name, sizeStr);
+      handleUpload(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const sizeStr = (file.size / (1024 * 1024)).toFixed(1) + " MB";
-      simulateUpload(file.name, sizeStr);
+      handleUpload(e.target.files[0]);
     }
   };
 
@@ -222,9 +159,21 @@ export default function UploadsPage() {
     fileInputRef.current?.click();
   };
 
-  const handleDeleteFile = (id: string, e: React.MouseEvent) => {
+  const handleDeleteFile = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFiles(files.filter((f) => f.id !== id));
+    if (!confirm("Delete this document and all its extracted questions?")) return;
+    try {
+      const res = await fetch(`/api/uploads/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setFiles(files.filter((f) => f.id !== id));
+        if (selectedFile?.id === id) setSelectedFile(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete");
+      }
+    } catch {
+      alert("Failed to delete file");
+    }
   };
 
   const filteredQuestions = selectedFile
@@ -244,6 +193,11 @@ export default function UploadsPage() {
         <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
           Add past exam sheets to segment individual questions and generate learning aids.
         </p>
+        {error && (
+          <div className="mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 text-xs text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -285,7 +239,6 @@ export default function UploadsPage() {
                 </p>
               </div>
 
-              {/* In-progress Upload Indicator */}
               {isUploading && (
                 <div className="p-4 rounded-2xl border border-violet-200/50 dark:border-violet-800/30 bg-violet-500/5 backdrop-blur-sm space-y-3">
                   <div className="flex items-center justify-between text-xs">
@@ -293,18 +246,20 @@ export default function UploadsPage() {
                       {uploadingFileName}
                     </span>
                     <span className="text-violet-600 dark:text-violet-400 font-bold">
-                      {uploadProgress}%
+                      {Math.round(uploadProgress)}%
                     </span>
                   </div>
                   <Progress value={uploadProgress} className="h-2 rounded-full bg-slate-100 dark:bg-zinc-900 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-violet-600 to-teal-500 rounded-full transition-all" />
+                    <div className="h-full bg-gradient-to-r from-violet-600 to-teal-500 rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
                   </Progress>
                   <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1.5">
                     <Sparkles className="h-3 w-3 text-violet-500 animate-spin" />
-                    Extracting questions with OCR engine...
+                    Extracting questions with AI engine...
                   </p>
                 </div>
               )}
+
+
             </CardContent>
           </Card>
         </div>
@@ -314,102 +269,117 @@ export default function UploadsPage() {
           <Card className="border-slate-200/50 dark:border-zinc-800/50 shadow-sm bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md">
             <CardHeader>
               <CardTitle className="text-base font-bold">Document Library</CardTitle>
-              <CardDescription>Manage and view processed question sheets</CardDescription>
+              <CardDescription>
+                {loading ? "Loading..." : `${files.length} document${files.length !== 1 ? "s" : ""} in library`}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-100 dark:border-zinc-800/60 pb-3 text-xs text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-wider">
-                      <th className="pb-3 font-medium">Document Name</th>
-                      <th className="pb-3 font-medium">Size</th>
-                      <th className="pb-3 font-medium">Status</th>
-                      <th className="pb-3 font-medium">Date Uploaded</th>
-                      <th className="pb-3 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/40">
-                    {files.map((file) => (
-                      <tr
-                        key={file.id}
-                        onClick={() => file.status === "COMPLETED" && setSelectedFile(file)}
-                        className={cn(
-                          "group hover:bg-slate-50/50 dark:hover:bg-zinc-900/20 transition-all",
-                          file.status === "COMPLETED" && "cursor-pointer"
-                        )}
-                      >
-                        <td className="py-4 pr-3 font-semibold text-slate-700 dark:text-zinc-200 flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-zinc-900 flex items-center justify-center text-slate-500 dark:text-zinc-400">
-                            <FileText className="h-4 w-4" />
-                          </div>
-                          <div className="truncate max-w-[220px] sm:max-w-xs flex flex-col">
-                            <span>{file.name}</span>
-                            {file.questionCount && (
-                              <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal">
-                                {file.questionCount} questions parsed
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-4 text-slate-500 dark:text-zinc-400 text-xs">
-                          {file.size}
-                        </td>
-                        <td className="py-4">
-                          <Badge
-                            className={cn(
-                              "rounded-full px-2.5 py-0.5 text-[10px] font-semibold border-none pointer-events-none",
-                              file.status === "COMPLETED"
-                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                : file.status === "PROCESSING"
-                                ? "bg-violet-500/10 text-violet-600 dark:text-violet-400"
-                                : "bg-red-500/10 text-red-600 dark:text-red-400"
-                            )}
-                          >
-                            {file.status === "COMPLETED" && (
-                              <CheckCircle className="h-3 w-3 mr-1 inline-block" />
-                            )}
-                            {file.status === "PROCESSING" && (
-                              <Clock className="h-3 w-3 mr-1 inline-block animate-spin" />
-                            )}
-                            {file.status === "ERROR" && (
-                              <AlertCircle className="h-3 w-3 mr-1 inline-block" />
-                            )}
-                            {file.status}
-                          </Badge>
-                        </td>
-                        <td className="py-4 text-slate-500 dark:text-zinc-400 text-xs">
-                          {file.date}
-                        </td>
-                        <td className="py-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {file.status === "COMPLETED" && (
+              {loading ? (
+                <div className="space-y-3">
+                  {[1,2,3].map(i => <div key={i} className="h-12 rounded-xl bg-slate-100 dark:bg-zinc-900 animate-pulse" />)}
+                </div>
+              ) : files.length === 0 ? (
+                <div className="text-center py-12 space-y-3">
+                  <div className="mx-auto h-12 w-12 rounded-full bg-slate-100 dark:bg-zinc-900 flex items-center justify-center text-slate-400">
+                    <FileText className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm text-slate-500 dark:text-zinc-400">No documents yet. Upload your first past question paper.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-zinc-800/60 pb-3 text-xs text-slate-400 dark:text-zinc-500 font-semibold uppercase tracking-wider">
+                        <th className="pb-3 font-medium">Document Name</th>
+                        <th className="pb-3 font-medium">Size</th>
+                        <th className="pb-3 font-medium">Status</th>
+                        <th className="pb-3 font-medium">Date</th>
+                        <th className="pb-3 font-medium text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/40">
+                      {files.map((file) => (
+                        <tr
+                          key={file.id}
+                          onClick={() => file.status === "COMPLETED" && setSelectedFile(file)}
+                          className={cn(
+                            "group hover:bg-slate-50/50 dark:hover:bg-zinc-900/20 transition-all",
+                            file.status === "COMPLETED" && "cursor-pointer"
+                          )}
+                        >
+                          <td className="py-4 pr-3 font-semibold text-slate-700 dark:text-zinc-200 flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-zinc-900 flex items-center justify-center text-slate-500 dark:text-zinc-400">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="truncate max-w-[220px] sm:max-w-xs flex flex-col">
+                              <span>{file.name}</span>
+                              {file.questionCount !== undefined && (
+                                <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal">
+                                  {file.questionCount} questions parsed
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 text-slate-500 dark:text-zinc-400 text-xs">
+                            {file.size}
+                          </td>
+                          <td className="py-4">
+                            <Badge
+                              className={cn(
+                                "rounded-full px-2.5 py-0.5 text-[10px] font-semibold border-none pointer-events-none",
+                                file.status === "COMPLETED"
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : file.status === "PROCESSING" || file.status === "PENDING"
+                                  ? "bg-violet-500/10 text-violet-600 dark:text-violet-400"
+                                  : "bg-red-500/10 text-red-600 dark:text-red-400"
+                              )}
+                            >
+                              {file.status === "COMPLETED" && (
+                                <CheckCircle className="h-3 w-3 mr-1 inline-block" />
+                              )}
+                              {(file.status === "PROCESSING" || file.status === "PENDING") && (
+                                <Clock className="h-3 w-3 mr-1 inline-block animate-spin" />
+                              )}
+                              {file.status === "ERROR" && (
+                                <AlertCircle className="h-3 w-3 mr-1 inline-block" />
+                              )}
+                              {file.status}
+                            </Badge>
+                          </td>
+                          <td className="py-4 text-slate-500 dark:text-zinc-400 text-xs">
+                            {file.date}
+                          </td>
+                          <td className="py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {file.status === "COMPLETED" && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedFile(file);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedFile(file);
-                                }}
+                                className="h-8 w-8 text-slate-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
+                                onClick={(e) => handleDeleteFile(file.id, e)}
                               >
-                                <Eye className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                            )}
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-slate-400 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
-                              onClick={(e) => handleDeleteFile(file.id, e)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -428,7 +398,6 @@ export default function UploadsPage() {
             </SheetDescription>
           </SheetHeader>
 
-          {/* Filtering Bar */}
           <div className="py-4 space-y-3">
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -457,7 +426,6 @@ export default function UploadsPage() {
             </div>
           </div>
 
-          {/* Questions List */}
           <div className="space-y-4 pt-2">
             {filteredQuestions.length === 0 ? (
               <div className="text-center py-8 text-xs text-slate-400 dark:text-zinc-500">

@@ -8,18 +8,15 @@ import {
   Bot,
   User,
   Sparkles,
-  Paperclip,
   BookOpen,
   ArrowUpRight,
-  Brain,
   ChevronRight,
   Database,
   ExternalLink,
-  Info
+  Info,
+  Trash2
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -39,109 +36,100 @@ interface ChatSession {
   id: string;
   title: string;
   date: string;
+  updatedAt: string;
+  messageCount: number;
   messages: Message[];
 }
 
-const mockSessions: ChatSession[] = [
-  {
-    id: "session-1",
-    title: "Operating Systems Semaphores",
-    date: "Today",
-    messages: [
-      {
-        id: "msg-1-1",
-        role: "USER",
-        content: "What is a semaphore and how does it solve process synchronization issues?",
-        timestamp: "4:15 PM",
-      },
-      {
-        id: "msg-1-2",
-        role: "ASSISTANT",
-        content: `A **semaphore** is an integer variable used for signaling and solving the process synchronization problem. It is accessed only through two standard atomic operations: \`wait()\` (historically known as \`P\`) and \`signal()\` (historically known as \`V\`).
-
-### 1. Types of Semaphores
-* **Binary Semaphore**: Can only take values \`0\` and \`1\`. It behaves similarly to a mutex lock, providing mutual exclusion.
-* **Counting Semaphore**: Can take values over an unrestricted domain. It is useful for controlling access to a finite set of resources.
-
-### 2. Implementation Mechanics
-The classic implementation of the synchronization operations:
-\`\`\`cpp
-void wait(Semaphore S) {
-    while (S <= 0) {
-        // busy wait (or block process in list)
-    }
-    S--;
-}
-
-void signal(Semaphore S) {
-    S++;
-}
-\`\`\`
-
-When a process executes \`wait()\`, it is blocked if the semaphore is less than or equal to zero. When a process finishes with a resource, it executes \`signal()\`, waking up any blocked processes.`,
-        timestamp: "4:16 PM",
-        sources: [
-          {
-            paper: "COSC 301 - Operating Systems 2024.pdf",
-            question: "Define mutual exclusion and discuss how semaphores can be used to solve synchronization issues.",
-            similarity: "94%",
-          },
-          {
-            paper: "COSC 301 - Operating Systems 2024.pdf",
-            question: "What is the critical section problem? Detail the three requirements that must be met by any valid solution.",
-            similarity: "81%",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "session-2",
-    title: "Database Relational Keys",
-    date: "Yesterday",
-    messages: [
-      {
-        id: "msg-2-1",
-        role: "USER",
-        content: "How do I identify functional dependencies and candidate keys?",
-        timestamp: "11:30 AM",
-      },
-      {
-        id: "msg-2-2",
-        role: "ASSISTANT",
-        content: "Functional dependencies represent constraints between sets of attributes in a relation. To find candidate keys: \n\n1. Find the closure of all individual attributes (or attribute groups) using Armstrong's axioms.\n2. An attribute set is a key if its closure contains all attributes in the relation.\n3. It is a candidate key if it is superkey and minimal (no proper subset is also a superkey).",
-        timestamp: "11:31 AM",
-        sources: [
-          {
-            paper: "COSC 303 - Database Systems 2025.docx",
-            question: "Given a schema R(A, B, C, D, E) with functional dependencies F = {A -> BC, CD -> E, B -> D}, identify the candidate keys and determine the highest normal form of R.",
-            similarity: "92%",
-          },
-        ],
-      },
-    ],
-  },
-];
-
 export default function ChatPage() {
-  const [sessions, setSessions] = useState<ChatSession[]>(mockSessions);
-  const [activeSessionId, setActiveSessionId] = useState("session-1");
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [selectedSourceMessage, setSelectedSourceMessage] = useState<Message | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
-  }, [activeSession.messages, isTyping]);
+  }, [activeSession?.messages, isTyping]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const fetchSessions = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/chat/sessions");
+      const data = await res.json();
+      if (res.ok) {
+        const sessList = data.sessions || [];
+        // Fetch messages for each session (lazy load only active)
+        if (sessList.length > 0 && !activeSessionId) {
+          const firstId = sessList[0].id;
+          setActiveSessionId(firstId);
+          // Load messages for first session
+          const firstFull = await fetchSessionMessages(firstId);
+          setSessions(sessList.map((s: any) => s.id === firstId ? firstFull : { ...s, messages: [] }));
+        } else {
+          setSessions(sessList.map((s: any) => ({ ...s, messages: s.messages || [] })));
+        }
+      }
+    } catch (e) {
+      setError("Failed to load chat sessions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSessionMessages = async (sessionId: string): Promise<ChatSession> => {
+    const res = await fetch(`/api/chat/messages?sessionId=${sessionId}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to load messages");
+    
+    // Find existing session meta
+    const meta = sessions.find(s => s.id === sessionId);
+    
+    return {
+      id: sessionId,
+      title: data.session?.title || meta?.title || "Chat Session",
+      date: meta?.date || new Date().toLocaleDateString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: data.messages?.length || 0,
+      messages: (data.messages || []).map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+        sources: m.sources,
+      })),
+    };
+  };
+
+  const handleSelectSession = async (sessionId: string) => {
+    const existing = sessions.find(s => s.id === sessionId);
+    if (existing && existing.messages.length > 0) {
+      setActiveSessionId(sessionId);
+      return;
+    }
+    try {
+      const full = await fetchSessionMessages(sessionId);
+      setSessions(prev => prev.map(s => s.id === sessionId ? full : s));
+      setActiveSessionId(sessionId);
+    } catch (e) {
+      setError("Failed to load messages");
+    }
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
 
@@ -152,85 +140,185 @@ export default function ChatPage() {
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    // Append user message immediately
-    const updatedSessions = sessions.map((s) => {
-      if (s.id === activeSessionId) {
-        return {
-          ...s,
-          messages: [...s.messages, userMsg],
-        };
-      }
-      return s;
-    });
-    setSessions(updatedSessions);
+    const messageToSend = inputMessage;
     setInputMessage("");
     setIsTyping(true);
 
-    // Simulate AI response stream
-    setTimeout(() => {
-      setIsTyping(false);
-      const aiResponseContent = `Based on your uploaded documents, process execution parameters require strict bounds on shared memory structures. 
+    // Optimistic update
+    if (activeSessionId) {
+      setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, userMsg] } : s));
+    } else {
+      // No active session, will be created by API
+      const tempId = `temp-${Date.now()}`;
+      setSessions(prev => [{
+        id: tempId,
+        title: messageToSend.slice(0, 32),
+        date: "Just now",
+        updatedAt: new Date().toISOString(),
+        messageCount: 1,
+        messages: [userMsg],
+      }, ...prev]);
+      setActiveSessionId(tempId);
+    }
 
-Here is the code representation of process exclusion:
-\`\`\`cpp
-do {
-    acquire_lock();
-    // Critical Section
-    release_lock();
-    // Remainder Section
-} while (true);
-\`\`\`
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: messageToSend,
+          sessionId: activeSessionId?.startsWith("temp-") ? undefined : activeSessionId,
+        }),
+      });
 
-To resolve synchronization:
-1. Ensure mutual exclusion is preserved.
-2. Ensure progressive access without deadlocks.
-3. Keep bounds on waiting times to avoid starvation.`;
+      // Check if it's JSON fallback (no OPENAI key) or streaming
+      const contentType = res.headers.get("content-type");
+      
+      if (contentType?.includes("application/json")) {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Chat failed");
 
-      const aiMsg: Message = {
-        id: `msg-ai-${Date.now()}`,
-        role: "ASSISTANT",
-        content: aiResponseContent,
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        sources: [
-          {
-            paper: "COSC 301 - Operating Systems 2024.pdf",
-            question: "What is the critical section problem? Detail the three requirements that must be met by any valid solution.",
-            similarity: "91%",
-          },
-        ],
-      };
+        const aiMsg: Message = {
+          id: `msg-ai-${Date.now()}`,
+          role: "ASSISTANT",
+          content: data.answer,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          sources: data.sources,
+        };
 
-      setSessions((prev) =>
-        prev.map((s) => {
-          if (s.id === activeSessionId) {
-            return {
-              ...s,
-              messages: [...s.messages, aiMsg],
-            };
+        if (activeSessionId?.startsWith("temp-") || !activeSessionId) {
+          // Replace temp session with real one
+          const realSessionId = data.sessionId;
+          setSessions(prev => {
+            const withoutTemp = prev.filter(s => !s.id.startsWith("temp-"));
+            return [{
+              id: realSessionId,
+              title: messageToSend.slice(0, 32),
+              date: "Just now",
+              updatedAt: new Date().toISOString(),
+              messageCount: 2,
+              messages: [userMsg, aiMsg],
+            }, ...withoutTemp];
+          });
+          setActiveSessionId(data.sessionId);
+        } else {
+          setSessions(prev => prev.map(s => {
+            if (s.id === activeSessionId) {
+              const sourcesHeader = res.headers.get("x-sources");
+              return { ...s, messages: [...s.messages, aiMsg] };
+            }
+            return s;
+          }));
+        }
+      } else {
+        // Streaming response
+        const sessionIdHeader = res.headers.get("x-session-id");
+        const sourcesHeader = res.headers.get("x-sources");
+        let parsedSources: any[] = [];
+        try {
+          parsedSources = sourcesHeader ? JSON.parse(sourcesHeader) : [];
+        } catch {}
+
+        if (!res.body) throw new Error("No response body");
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullText = "";
+
+        const aiMsgId = `msg-ai-${Date.now()}`;
+        
+        // Create placeholder AI message
+        const createPlaceholder = () => {
+          setSessions(prev => prev.map(s => {
+            if (s.id === (sessionIdHeader || activeSessionId)) {
+              const exists = s.messages.find(m => m.id === aiMsgId);
+              if (exists) {
+                return { ...s, messages: s.messages.map(m => m.id === aiMsgId ? { ...m, content: fullText } : m) };
+              } else {
+                return { 
+                  ...s, 
+                  messages: [...s.messages, {
+                    id: aiMsgId,
+                    role: "ASSISTANT" as const,
+                    content: fullText,
+                    timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    sources: parsedSources,
+                  }]
+                };
+              }
+            }
+            return s;
+          }));
+        };
+
+        if (activeSessionId?.startsWith("temp-")) {
+          const realId = sessionIdHeader;
+          if (realId) {
+            setSessions(prev => {
+              const tempSession = prev.find(s => s.id === activeSessionId);
+              const withoutTemp = prev.filter(s => !s.id.startsWith("temp-"));
+              if (!tempSession) return prev;
+              return [{
+                id: realId,
+                title: tempSession.title,
+                date: tempSession.date,
+                updatedAt: new Date().toISOString(),
+                messageCount: tempSession.messages.length + 1,
+                messages: [...tempSession.messages, {
+                  id: aiMsgId,
+                  role: "ASSISTANT" as const,
+                  content: "",
+                  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  sources: parsedSources,
+                }],
+              }, ...withoutTemp];
+            });
+            setActiveSessionId(realId);
           }
-          return s;
-        })
-      );
-    }, 2000);
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          fullText += chunk;
+          createPlaceholder();
+        }
+
+        // Ensure final sessionId update if needed
+        if (sessionIdHeader && activeSessionId?.startsWith("temp-")) {
+          setActiveSessionId(sessionIdHeader);
+        } else if (sessionIdHeader && !activeSessionId) {
+          setActiveSessionId(sessionIdHeader);
+          await fetchSessions(); // Refresh list
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to send message");
+      // Remove optimistic user message on error
+      setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: s.messages.slice(0, -1) } : s));
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleNewSession = () => {
-    const newId = `session-${Date.now()}`;
-    const newSession: ChatSession = {
-      id: newId,
-      title: "New Chat Session",
-      date: "Today",
-      messages: [
-        {
-          id: `msg-welcome-${Date.now()}`,
-          role: "ASSISTANT",
-          content: "Hello! Ask me any question related to your uploaded past papers, and I will answer with direct reference to the exam questions.",
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        },
-      ],
-    };
-    setSessions([newSession, ...sessions]);
-    setActiveSessionId(newId);
+    setActiveSessionId(null);
+    setSelectedSourceMessage(null);
+  };
+
+  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Delete this chat session?")) return;
+    try {
+      const res = await fetch(`/api/chat/sessions?sessionId=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSessions(prev => prev.filter(s => s.id !== id));
+        if (activeSessionId === id) {
+          setActiveSessionId(sessions.length > 1 ? sessions.find(s => s.id !== id)?.id || null : null);
+        }
+      }
+    } catch {}
   };
 
   return (
@@ -248,25 +336,40 @@ To resolve synchronization:
           <div className="text-[10px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wider px-2 mb-2">
             Active Threads
           </div>
-          {sessions.map((session) => {
-            const isActive = session.id === activeSessionId;
-            return (
-              <button
-                key={session.id}
-                onClick={() => setActiveSessionId(session.id)}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold transition-all truncate border",
-                  isActive
-                    ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20 dark:border-violet-500/10"
-                    : "text-slate-600 dark:text-zinc-400 border-transparent hover:bg-slate-50 dark:hover:bg-zinc-900/40"
-                )}
-              >
-                <MessageSquare className="h-4 w-4 shrink-0" />
-                <span className="truncate flex-1">{session.title}</span>
-                <ChevronRight className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100" />
-              </button>
-            );
-          })}
+          {loading ? (
+            <div className="space-y-2">
+              {[1,2,3].map(i => <div key={i} className="h-10 rounded-xl bg-slate-100 dark:bg-zinc-900 animate-pulse" />)}
+            </div>
+          ) : sessions.length === 0 ? (
+            <p className="text-xs text-slate-400 dark:text-zinc-500 px-2">No chat sessions yet. Start a new thread.</p>
+          ) : (
+            sessions.map((session) => {
+              const isActive = session.id === activeSessionId;
+              return (
+                <div key={session.id} className="group flex items-center gap-1">
+                  <button
+                    onClick={() => handleSelectSession(session.id)}
+                    className={cn(
+                      "flex-1 flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-xs font-semibold transition-all truncate border",
+                      isActive
+                        ? "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20 dark:border-violet-500/10"
+                        : "text-slate-600 dark:text-zinc-400 border-transparent hover:bg-slate-50 dark:hover:bg-zinc-900/40"
+                    )}
+                  >
+                    <MessageSquare className="h-4 w-4 shrink-0" />
+                    <span className="truncate flex-1">{session.title}</span>
+                    <ChevronRight className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100" />
+                  </button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500" onClick={(e) => handleDeleteSession(session.id, e)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="pt-3 border-t border-slate-100 dark:border-zinc-800/50 mt-3 text-[10px] text-slate-400 dark:text-zinc-500">
+          {error && <span className="text-red-500">{error}</span>}
         </div>
       </div>
 
@@ -280,74 +383,89 @@ To resolve synchronization:
             </div>
             <div className="flex flex-col">
               <span className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                {activeSession.title}
+                {activeSession ? activeSession.title : "New Chat Session"}
               </span>
               <span className="text-[9px] text-emerald-500 font-semibold flex items-center gap-1">
                 ● RAG Engine Grounded
               </span>
             </div>
           </div>
+          <Button variant="ghost" size="sm" className="md:hidden" onClick={handleNewSession}>
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Messages list */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {activeSession.messages.map((message) => {
-            const isUser = message.role === "USER";
-            return (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex gap-4 max-w-3xl",
-                  isUser ? "ml-auto flex-row-reverse" : "mr-auto"
-                )}
-              >
+          {!activeSession || activeSession.messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
+              <div className="h-16 w-16 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-500">
+                <Sparkles className="h-8 w-8" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-zinc-100">StudyAI Tutor Ready</h3>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1 max-w-xs">
+                  Ask me any question related to your uploaded past papers, and I will answer with direct reference to the exam questions. Upload papers first for best results.
+                </p>
+              </div>
+            </div>
+          ) : (
+            activeSession.messages.map((message) => {
+              const isUser = message.role === "USER";
+              return (
                 <div
+                  key={message.id}
                   className={cn(
-                    "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm text-xs font-bold",
-                    isUser
-                      ? "bg-teal-500/10 text-teal-600 dark:text-teal-400"
-                      : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
+                    "flex gap-4 max-w-3xl",
+                    isUser ? "ml-auto flex-row-reverse" : "mr-auto"
                   )}
                 >
-                  {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                </div>
-
-                <div className="space-y-2">
                   <div
                     className={cn(
-                      "px-4 py-3 rounded-2xl text-xs leading-relaxed border font-sans whitespace-pre-wrap shadow-sm",
+                      "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm text-xs font-bold",
                       isUser
-                        ? "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800/60 text-slate-800 dark:text-zinc-200 rounded-tr-none"
-                        : "bg-white dark:bg-zinc-950 border-slate-200/50 dark:border-zinc-900 text-slate-800 dark:text-zinc-200 rounded-tl-none"
+                        ? "bg-teal-500/10 text-teal-600 dark:text-teal-400"
+                        : "bg-violet-500/10 text-violet-600 dark:text-violet-400"
                     )}
                   >
-                    {message.content}
+                    {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                   </div>
 
-                  {/* Sources Grounding Tag */}
-                  {!isUser && message.sources && message.sources.length > 0 && (
-                    <div className="flex items-center gap-1.5 pl-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedSourceMessage(message)}
-                        className="h-6 px-2 rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800/50 text-[10px] text-violet-600 hover:text-violet-700 dark:text-violet-400 flex items-center gap-1 font-semibold"
-                      >
-                        <Database className="h-3 w-3" />
-                        Grounded on {message.sources.length} past paper references
-                        <ArrowUpRight className="h-3 w-3" />
-                      </Button>
+                  <div className="space-y-2">
+                    <div
+                      className={cn(
+                        "px-4 py-3 rounded-2xl text-xs leading-relaxed border font-sans whitespace-pre-wrap shadow-sm",
+                        isUser
+                          ? "bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800/60 text-slate-800 dark:text-zinc-200 rounded-tr-none"
+                          : "bg-white dark:bg-zinc-950 border-slate-200/50 dark:border-zinc-900 text-slate-800 dark:text-zinc-200 rounded-tl-none"
+                      )}
+                    >
+                      {message.content}
                     </div>
-                  )}
-                  <span className="block text-[9px] text-slate-400 dark:text-zinc-500 pl-1">
-                    {message.timestamp}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
 
-          {/* Typing Indicator */}
+                    {!isUser && message.sources && message.sources.length > 0 && (
+                      <div className="flex items-center gap-1.5 pl-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedSourceMessage(message)}
+                          className="h-6 px-2 rounded-lg bg-slate-50 dark:bg-zinc-900 border border-slate-200/50 dark:border-zinc-800/50 text-[10px] text-violet-600 hover:text-violet-700 dark:text-violet-400 flex items-center gap-1 font-semibold"
+                        >
+                          <Database className="h-3 w-3" />
+                          Grounded on {message.sources.length} past paper references
+                          <ArrowUpRight className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                    <span className="block text-[9px] text-slate-400 dark:text-zinc-500 pl-1">
+                      {message.timestamp}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+
           {isTyping && (
             <div className="flex gap-4 mr-auto max-w-3xl">
               <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0 text-violet-600 dark:text-violet-400">
@@ -365,20 +483,10 @@ To resolve synchronization:
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Text Input Panel */}
         <form
           onSubmit={handleSendMessage}
           className="p-4 border-t border-slate-100 dark:border-zinc-800/50 bg-white/50 dark:bg-zinc-950/30 flex gap-2 items-end relative"
         >
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-10 w-10 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 rounded-full shrink-0"
-          >
-            <Paperclip className="h-5 w-5" />
-          </Button>
-
           <Textarea
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
@@ -388,7 +496,7 @@ To resolve synchronization:
                 handleSendMessage(e);
               }
             }}
-            placeholder="Ask a question about semaphores, normal forms..."
+            placeholder="Ask a question about your past papers..."
             className="flex-1 min-h-[44px] max-h-32 h-[44px] py-3 rounded-2xl border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 outline-none focus-visible:ring-1 focus-visible:ring-violet-500 text-xs resize-none"
           />
 
@@ -402,7 +510,6 @@ To resolve synchronization:
         </form>
       </div>
 
-      {/* RAG Context Panel Side Drawer */}
       {selectedSourceMessage && (
         <div className="absolute inset-y-0 right-0 w-80 bg-white dark:bg-zinc-950 border-l border-slate-200 dark:border-zinc-800/80 p-5 z-40 flex flex-col shadow-2xl animate-slide-in backdrop-blur-md rounded-l-3xl">
           <div className="flex justify-between items-center mb-6">
@@ -440,15 +547,6 @@ To resolve synchronization:
                 <p className="text-[10.5px] text-slate-700 dark:text-zinc-300 leading-relaxed italic font-mono">
                   &ldquo;{src.question}&rdquo;
                 </p>
-                <div className="flex justify-end pt-1">
-                  <a
-                    href="#"
-                    className="text-[9px] font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-0.5 hover:underline"
-                  >
-                    View Source Document
-                    <ExternalLink className="h-2.5 w-2.5" />
-                  </a>
-                </div>
               </div>
             ))}
           </div>

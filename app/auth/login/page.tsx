@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Lock, Mail, ArrowRight, Eye, EyeOff } from "lucide-react";
@@ -15,7 +16,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError("Please fill in all fields");
@@ -24,11 +25,32 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
 
-    // Simulate authentication and redirect to dashboard
-    setTimeout(() => {
+    try {
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        // Surface DB connection errors specifically
+        if (
+          result.error.includes("Database") ||
+          result.error.includes("Neon") ||
+          result.error.includes("connection")
+        ) {
+          setError(result.error);
+        } else {
+          setError("Invalid email or password");
+        }
+      } else if (result?.ok) {
+        router.push("/dashboard");
+      }
+    } catch (err) {
+      setError("Login failed. Please try again. If DB is paused, wait 10s and retry.");
+    } finally {
       setIsLoading(false);
-      router.push("/dashboard");
-    }, 1500);
+    }
   };
 
   return (
