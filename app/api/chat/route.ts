@@ -226,7 +226,7 @@ Guidelines:
 
     return result.toTextStreamResponse({
       headers: {
-        "x-sources": JSON.stringify(sources),
+        "x-sources": encodeURIComponent(JSON.stringify(sources)),
         "x-session-id": activeSessionId,
       },
     });

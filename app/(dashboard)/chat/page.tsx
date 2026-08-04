@@ -216,8 +216,12 @@ export default function ChatPage() {
         const sourcesHeader = res.headers.get("x-sources");
         let parsedSources: any[] = [];
         try {
-          parsedSources = sourcesHeader ? JSON.parse(sourcesHeader) : [];
-        } catch {}
+          parsedSources = sourcesHeader ? JSON.parse(decodeURIComponent(sourcesHeader)) : [];
+        } catch {
+          try {
+            parsedSources = sourcesHeader ? JSON.parse(sourcesHeader) : [];
+          } catch {}
+        }
 
         if (!res.body) throw new Error("No response body");
 
